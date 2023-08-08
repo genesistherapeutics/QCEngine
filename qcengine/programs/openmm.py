@@ -9,6 +9,7 @@ import os
 from typing import TYPE_CHECKING, Dict
 
 import numpy as np
+from openff.units.openmm import to_openmm
 from qcelemental.models import AtomicResult, BasisSet, Provenance
 from qcelemental.util import safe_version, which_import
 
@@ -300,7 +301,7 @@ class OpenMMHarness(ProgramHarness):
         try:
             context.setPositions(off_mol.conformers[0])
         except ValueError:
-            context.setPositions(off_mol.conformers[0].to_openmm())
+            context.setPositions(to_openmm(off_mol.conformers[0]))
 
         # Compute the energy of the configuration
         state = context.getState(getEnergy=True)
