@@ -6,6 +6,7 @@ Requires RDKit
 import datetime
 import hashlib
 import os
+import warnings
 from typing import TYPE_CHECKING, Dict
 
 import numpy as np
@@ -279,20 +280,23 @@ class OpenMMHarness(ProgramHarness):
         # Need an integrator for simulation even if we don't end up using it really
         integrator = openmm.VerletIntegrator(1.0 * unit.femtoseconds)
 
-        # Set platform to CPU explicitly
-        platform = openmm.Platform.getPlatformByName("CPU")
-
         # Set number of threads to use
         # if `nthreads` is `None`, OpenMM default of all logical cores on
         # processor will be used
         nthreads = config.ncores
         if nthreads is None:
             nthreads = os.environ.get("OPENMM_CPU_THREADS")
-
-        if nthreads:
-            properties = {"Threads": str(nthreads)}
-        else:
-            properties = {}
+        # Try to run with CUDA, otherwise fallback to gpu
+        try:
+            platform = openmm.Platform.getPlatformByName('CUDA')
+            properties = {'CudaPrecision': 'mixed'}
+        except:
+            platform = openmm.Platform.getPlatformByName("CPU")
+            if nthreads:
+                properties = {"Threads": str(nthreads)}
+            else:
+                properties = {}
+        warnings.warn(f'Running OpenMM with {platform =}')
 
         # Initialize context
         context = openmm.Context(openmm_system, integrator, platform, properties)
