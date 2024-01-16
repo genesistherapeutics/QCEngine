@@ -43,6 +43,11 @@ def get_global(key: Optional[str] = None) -> Union[str, Dict[str, Any]]:
         # Work through VMs and logical cores.
         if hasattr(psutil.Process(), "cpu_affinity"):
             cpu_cnt = len(psutil.Process().cpu_affinity())
+            full_physical_cnt = psutil.cpu_count(logical=False)
+            full_logical_cnt = psutil.cpu_count(logical=True)
+            if (cpu_cnt == full_logical_cnt) and (full_physical_cnt is not None):
+                # cpu_affinity isn't capturing deliberate setting but just VMs, so use physical
+                cpu_cnt = full_physical_cnt
         else:
             cpu_cnt = psutil.cpu_count(logical=False)
             if cpu_cnt is None:
@@ -84,7 +89,7 @@ class NodeDescriptor(pydantic.BaseModel):
     
     The default value, ``None``, will allow QCEngine to autodetect the number of cores.""",
     )
-    jobs_per_node: int = 2
+    jobs_per_node: int = 1
     retries: int = 0
 
     # Cluster options
@@ -259,11 +264,9 @@ def parse_environment(data: Dict[str, Any]) -> Dict[str, Any]:
     """Collects local environment variable values into ``data`` for any keys with RHS starting with ``$``."""
     ret = {}
     for k, var in data.items():
-        if isinstance(var, str) and var.startswith("$"):
-            var = var.replace("$", "", 1)
-            if var in os.environ:
-                var = os.environ[var]
-            else:
+        if isinstance(var, str):
+            var = os.path.expanduser(os.path.expandvars(var))
+            if var.startswith("$"):
                 var = None
 
         ret[k] = var
@@ -293,7 +296,7 @@ def get_config(*, hostname: Optional[str] = None, task_config: Dict[str, Any] = 
         task_config = {}
 
     task_config_env = read_qcengine_task_environment()
-    task_config = {**task_config_env, **task_config}
+    task_config = {**task_config_env, **parse_environment(task_config)}
 
     config = {}
 
